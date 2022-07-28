@@ -1,0 +1,281 @@
+#!/bin/bash
+
+## run the program with command : a.backup -data
+
+
+
+
+# COLOR FORMATING
+BLU="\033[1;34m"
+GRE="\033[0;32m"
+YEL="\033[1;33m"
+RED="\033[0;31m"
+NC="\033[0m" # No Color
+
+
+# Recursion Formating
+
+rtab () {
+	i="0"
+	t=""
+	t_char=" ---"
+	while [ $i -lt $1 ]
+	do
+	   #t="$t$t_char"
+	   t+="$t_char"
+	   i=$[$i+1]
+	done
+
+	local retval=$t
+	echo "$retval"
+
+}
+
+# TEST ALL DRIVES AND DIRECTORIES
+
+test_temp () {
+	temp_dir=$1
+	if [ ! -e "$temp_dir" ]; then 
+		echo -e "$rt ${RED}The source drive $temp_dir doesn't exist...${NC}"
+		echo -e "$rt ${RED}Exiting Program...${NC}"
+		exit 6
+	fi
+	echo -e "$rt Temporatry Storage ${BLU}$temp_dir${NC} exists..."
+}
+
+test_source_drive () {
+	source_drive=$1
+	if [ ! -e "$source_drive" ]; then 
+		echo -e "$rt ${RED}The source drive $source_drive doesn't exist...${NC}"
+		echo -e "$rt ${RED}Exiting Program...${NC}"
+		exit 1
+	fi
+	echo -e "$rt (BACKUP FROM) Source Drive ${BLU}$source_drive${NC} exists..."
+}
+
+test_target_drive () {
+	target_drive=$1
+	if [ ! -e "$target_drive" ]; then 
+		echo -e "$rt ${RED}The source drive $target_drive doesn't exist...${NC}"
+		echo -e "$rt ${RED}Exiting Program...${NC}"
+		exit 2
+	fi
+	echo -e "$rt (BACKUP TO) Target Drive ${BLU}$target_drive${NC} exists..."
+}
+
+
+test_source () {
+	source=$1
+	if [ ! -e "$source" ]; then 
+		echo -e "$rt ${RED}The Source directory $source doesn't exist...${NC}"
+		echo -e "$rt ${RED}Exiting Program...${NC}"
+		exit 3
+	fi
+	echo -e "$rt (BACKUP FROM) Source Directory ${BLU}$source${NC} exists..."
+}
+
+
+
+test_target () {
+	target=$1
+	if [ ! -e "$target" ]; then 
+		echo -e "$rt ${YEL}The Target directory ${BLU}$target ${YEL}doesn't exist...${NC}"
+		echo -e "$rt ${YEL}Creating ${BLU}$target ${YEL}...${NC}"
+		mkdir "$target"
+		if [ $? -eq 0 ]; then 
+			echo -e "$rt ${GRE}Directory ${BLU}$target ${GRE}Created successfully${NC}"
+		else 
+			echo -e "$rt ${RED}Failed to create $target ...${NC}"
+			echo -e "$rt ${RED}Exiting Program...${NC}"
+			exit 4
+		fi
+	else
+		echo -e "$rt (BACKUP TO) Target Directory ${BLU}$target${NC} exists..."
+	fi
+}
+
+# MAIN: BACKUP FUNCTION
+
+backup () {
+    #shopt -s nullglob dotglob
+	
+	source=$1
+	target=$2
+	
+	now=$(date +'%b-%d-%Y')
+
+	readarray -t source_items <<<"$(ls $source)"
+
+	echo ""
+	echo -e "$rt Comparing Source: ${BLU}$source${NC} ---- > Target: ${BLU}$target${NC}"
+	echo ""
+	
+	for source_name in "${source_items[@]}"; do 
+		
+		item_source=$((item_source+1))
+
+		r=$((r+1))
+		rt=$(rtab "$r")
+		
+		
+		copy_ready=false
+		temp_delete_ready=false
+		
+
+		source_path="$source/$source_name"
+		search_target_path="$target/$source_name*.7z"
+		new_target_path="$target/$source_name-$now.7z"
+		new_target="$source_name-$now.zip"
+		
+		
+		## VARIABLE PASSWORD ENCRYPTION
+		## password is based on the the name of file or folder and a specified key, the const variablle bellow
+		
+		p0=$source_name
+		const="MyPassw0rd"	## <----- CHANGE THIS VARRIABLE To something better and memorable
+		p1=${p0:0:1}
+		p2=${p0:1:1}
+		pass=${p1^^}${p1,,}${p2^^}${p2,,}$const
+		
+		## the first part of the password will be based on the first two letters of the folder being encrypted,
+		## using uppercase and lowercase for each + the const password key varriable above
+		
+		## for example, if the folder is named BestFolder, password will be take the first two letters B and E
+		## = BbEeMyPassw0rd 
+		## if the folder is named FavoriteFolder, password will be take the first two letters F and A
+		## = FfAaMyPassw0rd
+		
+		
+		
+
+		echo -e "$rt In ${BLU}$source${NC} found ${BLU}$source_name${NC}"
+		
+		if [ ! -e $search_target_path ]; then
+			copy_ready=true
+			echo -e "$rt Searching ${BLU}$target${NC} for ${BLU}$source_name${NC} ---> ${YEL}Not Found${NC}"
+		else
+			old_target_path=$(find $search_target_path)
+			old_target=$(find $search_target_path | cut -d'/' -f3-)
+			echo -e "$rt Searching ${BLU}$target${NC} for ${BLU}$source_name${NC} ---> ${GRE}Match${NC}"
+			echo -e "$rt ${YEL}COPYING${NC} previous backup ${BLU}$old_target${NC} ---> ${BLU}$temp_dir${NC} ... ... ..."
+			cp -r "$old_target_path" "$temp_dir"
+			if [ $? -eq 0 ]; then 
+				copy_ready=true
+				temp_delete_ready=true
+				echo -e "$rt ${GRE}Success!${NC}"
+			else 
+				echo -e "$rt ${RED}Failed to Copy $old_target --> $temp_dir ...${NC}"
+				item_failed=$((item_failed+1))
+			fi
+
+		fi
+		
+		
+		if [ $copy_ready == true  ]; then 
+			echo -e "$rt ${YEL}ZIPING${NC} ${BLU}$new_target${NC} --> ${BLU}$target${NC} ... ... ..."
+			7z a -r "$new_target_path" -p"$pass" "$source_path"  > NUL
+			if [ $? -eq 0 ]; then 
+				item_backup=$((item_backup+1))
+				echo -e "$rt ${GRE}Success!${NC}"
+				if [ $temp_delete_ready == true  ]; then 
+					echo -e "$rt ${YEL}REMOVING${NC} ${BLU}$new_target${NC} --> ${BLU}$temp_dir${NC} ... ... ..."
+					rm -r "$temp_dir/$old_target"
+					if [ $? -eq 0 ]; then 
+						echo -e "$rt ${GRE}Success!${NC}"
+					else 
+						echo -e "$rt ${RED}Failed to Remove $old_target --> $temp_dir ...${NC}"
+						temp_failed=$((temp_failed+1))
+					fi
+				fi
+			else 
+				echo -e "$rt ${RED}Failed to Zip New $source_name --> $new_target_path ...${NC}"
+				item_failed=$((item_failed+1))
+			fi
+		fi
+		
+		r=$((r-1))
+		rt=$(rtab "$r")
+	done
+	
+	
+	## BACKUP RESULTS
+	item_target=$(ls $target | wc -l)	
+	res1="Source Items = $item_source -- Target Items  = $item_target --  Items Backup = $item_backup "
+	res2="Items Failed to Backup = $item_failed -- Items Failed to delete from Temp Dir  = $temp_failed "
+	echo ""
+	echo "$rt BACKUP RESULTS ---------------------------------------------------------"
+	echo "$rt $res1"
+	echo "$rt $res2"
+	echo ""
+	if [[ $item_source -eq $item_backup ]] && [ $item_failed -eq 0 ]; then
+		echo -e "$rt ${GRE}Syncronization Success!${NC}"
+	else
+		echo -e "$rt ${RED}Warning, something went horibly, dreadfully wrong...${NC}"
+		echo -e "$rt ${RED}Not all items in $source were backed up in $target...${NC}"
+	fi
+	if [[ $item_target -gt $item_source ]]; then
+		echo ""
+		echo -e "$rt ${YEL}There are more items in the Backup Folder than at the Source...${NC}"
+		echo -e "$rt ${YEL}Perhaps you changed some folder names since the last backup?${NC}"
+		echo -e "$rt ${YEL}Worth looking into ${BLU}$target ${YEL}...${NC}"
+	fi
+	if [[ $temp_failed -ne 0 ]]; then
+		echo ""
+		echo -e "$rt ${YEL}For whatever reason, some files were not properly deleted from Temp Storage${NC}"
+		echo -e "$rt ${YEL}Worth looking into ${BLU}$temp_dir...${NC}"
+	fi
+}
+
+
+
+# RECURSION FORMATING
+
+r=0
+rt=$(rtab "$r")
+
+echo ""
+echo "$rt Basic Checks... ... ..."
+echo ""
+
+
+#TEMP DIR
+temp_dir="e:/99TEMP"
+test_temp "$temp_dir"
+
+
+## BASIC TEST PROGRAM INITIATION
+
+prog=$1
+
+
+
+if [ $prog == "-data" ] ; then
+
+	
+	item_source=0
+	item_target=0
+	item_backup=0
+	item_failed=0
+	temp_failed=0
+
+	## In this example the folder e:/00Data is being copied to f:/00Data_LatestBackup
+	## Change the bellow varriable so this makes sense on your computer.
+
+	source_drive="e:/" ## <----- CHANGE THIS VARRIABLE to the source drive of the data being copied
+	test_source_drive "$source_drive"
+	target_drive="f:/" ## <----- CHANGE THIS VARRIABLE to the drive to which the data is being coppied
+	test_target_drive "$target_drive"
+	source_dir="00Data" ## <----- CHANGE THIS VARRIABLE to the source folder of the data being copied
+	target_dir="00Data_LatestBackup" ## <----- CHANGE THIS VARRIABLE to the folder to which the data is being coppied
+	source="$source_drive$source_dir"
+	test_source "$source"
+	target="$target_drive$target_dir"
+	test_target "$target"
+	
+	backup "$source" "$target" 
+fi
+
+
+
+	
+	
